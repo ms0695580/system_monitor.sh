@@ -1,0 +1,25 @@
+# Security Audit and Hardening Script
+
+## Overview
+
+This script automates security audits and server hardening for Linux servers. It performs user and group audits, checks file and directory permissions, verifies running services, and implements various security hardening steps.
+
+## Features
+
+- **User and Group Audits:** List users/groups, check for UID 0, report non-standard users, and weak passwords.
+- **File and Directory Permissions:** Scan for world-writable files, check `.ssh` directory permissions, report SUID/SGID bits.
+- **Service Audits:** List running services, check for unauthorized services, ensure critical services are running.
+- **Firewall and Network Security:** Verify firewall configuration, report open ports, check IP forwarding and network configuration.
+- **IP and Network Configuration:** Identify public vs. private IP addresses and ensure sensitive services are not exposed.
+- **Security Updates and Patching:** Check for security updates and ensure the server is configured for automatic updates.
+- **Log Monitoring:** Check logs for suspicious entries.
+- **Server Hardening:** Implement SSH key-based authentication, disable IPv6, secure GRUB, configure iptables, set up automatic updates.
+- **Custom Security Checks:** Execute custom checks from a configuration file.
+- **Reporting and Alerting:** Generate a summary report of the audit and hardening process.
+
+## Usage
+
+Make the script executable:
+
+```bash
+chmod +x security_audit.sh
