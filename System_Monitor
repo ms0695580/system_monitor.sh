@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# Function to display help message
+show_help() {
+    echo "Usage: $0 [-cpu] [-memory] [-network] [-disk] [-load] [-processes] [-services] [-all]"
+    echo "Options:"
+    echo "  -cpu       Display top 10 processes by CPU and Memory usage"
+    echo "  -network   Display network monitoring stats"
+    echo "  -disk      Display disk usage and highlight partitions using more than 80% of the space"
+    echo "  -load      Show system load average and CPU usage breakdown"
+    echo "  -memory    Display total, used, and free memory and swap usage"
+    echo "  -processes Display number of active processes and top 5 processes by CPU and Memory usage"
+    echo "  -services  Monitor the status of essential services like sshd, nginx/apache, iptables"
+    echo "  -all       Display all information"
+    echo "  -help      Display this help message"
+}
+
+# Function to display top 10 processes by CPU and Memory usage
+display_top_usage() {
+    echo "Top 10 processes by CPU usage:"
+    ps aux --sort=-%cpu | head -n 11
+    echo
+    echo "Top 10 processes by Memory usage:"
+    ps aux --sort=-%mem | head -n 11
+}
+
+# Function to display network monitoring stats
+display_network() {
+    echo "Number of concurrent connections to the server:"
+    netstat -an | grep ESTABLISHED | wc -l
+    echo
+    echo "Packet drops:"
+    netstat -i | awk '{if(NR==2) print $4}'  # Display RX-ERR (Packet drops)
+    echo
+    echo "Network traffic (MB in and out):"
+    ifconfig eth0 | grep -E 'RX packets|TX packets'  # Replace eth0 with your network interface
+}
+
+# Function to display disk usage
+display_disk_usage() {
+    echo "Disk space usage by mounted partitions:"
+    df -h
+    echo
+    echo "Partitions using more than 80% of the space:"
+    df -h | awk '$5 > 80 {print $0}'
+}
+
+# Function to display system load and CPU breakdown
+display_system_load() {
+    echo "Current load average:"
+    uptime
+    echo
+    echo "CPU usage breakdown:"
+    top -bn1 | grep "Cpu(s)"
+}
+
+# Function to display memory usage
+display_memory_usage() {
+    echo "Memory usage:"
+    free -h
+    echo
+    echo "Swap usage:"
+    swapon --show
+}
+
+# Function to display process monitoring
+display_process_monitoring() {
+    echo "Number of active processes:"
+    ps -e | wc -l
+    echo
+    echo "Top 5 processes by CPU usage:"
+    ps aux --sort=-%cpu | head -n 6
+    echo
+    echo "Top 5 processes by Memory usage:"
+    ps aux --sort=-%mem | head -n 6
+}
+
+# Function to display service monitoring
+display_service_monitoring() {
+    echo "Service status (sshd, nginx/apache, iptables):"
+    systemctl status sshd
+    systemctl status nginx || systemctl status apache2
+    systemctl status iptables
+}
+
+# Parse command-line options
+while [[ "$1" != "" ]]; do
+    case $1 in
+        -cpu)
+            display_top_usage
+            ;;
+        -network)
+            display_network
+            ;;
+        -disk)
+            display_disk_usage
+            ;;
+        -load)
+            display_system_load
+            ;;
+        -memory)
+            display_memory_usage
+            ;;
+        -processes)
+            display_process_monitoring
+            ;;
+        -services)
+            display_service_monitoring
+            ;;
+        -all)
+            display_top_usage
+            echo
+            echo "----------------------------------"
+            display_network
+            echo
+            echo "----------------------------------"
+            display_disk_usage
+            echo
+            echo "----------------------------------"
+            display_system_load
+            echo
+            echo "----------------------------------"
+            display_memory_usage
+            echo
+            echo "----------------------------------"
+            display_process_monitoring
+            echo
+            echo "----------------------------------"
+            display_service_monitoring
+            ;;
+        -help)
+            show_help
+            ;;
+        *)
+            echo "Invalid option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# If no arguments are passed, show help
+if [[ "$#" -eq 0 ]]; then
+    show_help
+fi
