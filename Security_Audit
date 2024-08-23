@@ -1,0 +1,237 @@
+#!/bin/bash
+
+# Function to display help message
+show_help() {
+    echo "Usage: $0 [-user] [-permissions] [-services] [-firewall] [-network] [-updates] [-logs] [-hardening] [-custom] [-report]"
+    echo "Options:"
+    echo "  -user      List all users, check for UID 0, and report non-standard users and weak passwords"
+    echo "  -permissions Scan file and directory permissions"
+    echo "  -services  List running services and check for unauthorized services"
+    echo "  -firewall   Verify firewall configuration and open ports"
+    echo "  -network    Check IP addresses, public vs. private"
+    echo "  -updates    Check for security updates and patching"
+    echo "  -logs       Monitor logs for suspicious entries"
+    echo "  -hardening  Implement server hardening steps"
+    echo "  -custom     Execute custom security checks from configuration file"
+    echo "  -report     Generate a summary report of the audit and hardening process"
+    echo "  -help      Display this help message"
+}
+
+# Function to list users and groups
+check_users() {
+    echo "Listing all users and groups:"
+    echo "Users:"
+    cut -d: -f1 /etc/passwd
+    echo
+    echo "Groups:"
+    cut -d: -f1 /etc/group
+    echo
+
+    echo "Checking for users with UID 0:"
+    awk -F: '$3 == 0 {print $1}' /etc/passwd
+    echo
+
+    echo "Checking for users without passwords or weak passwords:"
+    grep -E '^[^:]+::' /etc/shadow
+    # For weak passwords, more advanced checks can be implemented
+}
+
+# Function to scan file and directory permissions
+check_permissions() {
+    echo "Scanning for world-writable files and directories:"
+    find / -xdev -type f -perm -002 -exec ls -l {} \;
+    find / -xdev -type d -perm -002 -exec ls -ld {} \;
+    echo
+
+    echo "Checking .ssh directories for secure permissions:"
+    find /home -type d -name ".ssh" -exec ls -ld {} \;
+    echo
+
+    echo "Reporting files with SUID or SGID bits set:"
+    find / -type f \( -perm -4000 -o -perm -2000 \) -exec ls -l {} \;
+}
+
+# Function to list running services and check for unauthorized services
+check_services() {
+    echo "Listing all running services:"
+    systemctl list-units --type=service --state=running
+    echo
+
+    echo "Checking critical services:"
+    systemctl status sshd
+    systemctl status iptables
+    echo
+
+    echo "Checking for services listening on non-standard ports:"
+    netstat -tuln
+}
+
+# Function to verify firewall configuration and open ports
+check_firewall() {
+    echo "Verifying firewall configuration:"
+    if command -v iptables >/dev/null; then
+        iptables -L -n
+    elif command -v ufw >/dev/null; then
+        ufw status
+    else
+        echo "No known firewall command found."
+    fi
+    echo
+
+    echo "Reporting open ports and associated services:"
+    netstat -tuln
+}
+
+# Function to check IP addresses, public vs. private
+check_network() {
+    echo "Identifying public and private IP addresses:"
+    ip addr show | grep 'inet ' | awk '{print $2}' | while read -r ip; do
+        if [[ $ip =~ ^10\.|^172\.16\.|^192\.168\. ]]; then
+            echo "$ip is private"
+        else
+            echo "$ip is public"
+        fi
+    done
+}
+
+# Function to check for security updates
+check_updates() {
+    echo "Checking for available security updates:"
+    if command -v apt-get >/dev/null; then
+        apt-get update && apt-get upgrade -s
+    elif command -v yum >/dev/null; then
+        yum check-update
+    else
+        echo "No known package manager found."
+    fi
+}
+
+# Function to monitor logs for suspicious entries
+check_logs() {
+    echo "Checking logs for suspicious entries:"
+    grep "Failed password" /var/log/auth.log
+    grep "sshd" /var/log/auth.log
+    echo
+}
+
+# Function to implement server hardening steps
+implement_hardening() {
+    echo "Implementing SSH key-based authentication and disabling password-based login for root:"
+    sed -i '/^PermitRootLogin/d' /etc/ssh/sshd_config
+    echo "PermitRootLogin prohibit-password" >> /etc/ssh/sshd_config
+    echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+    systemctl restart sshd
+    echo
+
+    echo "Disabling IPv6 (if not required):"
+    if grep -q "GRUB_CMDLINE_LINUX=\"\";" /etc/default/grub; then
+        sed -i '/GRUB_CMDLINE_LINUX/d' /etc/default/grub
+        echo 'GRUB_CMDLINE_LINUX="ipv6.disable=1"' >> /etc/default/grub
+        update-grub
+    fi
+    echo
+
+    echo "Securing the bootloader (GRUB):"
+    echo "Enter a password for GRUB in /etc/grub.d/40_custom"
+    echo "password_pbkdf2 user $(grub-mkpasswd-pbkdf2)" >> /etc/grub.d/40_custom
+    update-grub
+    echo
+
+    echo "Implementing recommended iptables rules:"
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT ACCEPT
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+    iptables-save > /etc/iptables/rules.v4
+    echo
+
+    echo "Configuring automatic updates:"
+    if command -v unattended-upgrade >/dev/null; then
+        dpkg-reconfigure --priority=low unattended-upgrades
+    fi
+}
+
+# Function to execute custom security checks from configuration file
+execute_custom_checks() {
+    echo "Executing custom security checks from configuration file:"
+    if [[ -f /etc/security_audit/custom_checks.sh ]]; then
+        bash /etc/security_audit/custom_checks.sh
+    else
+        echo "No custom checks configuration file found."
+    fi
+}
+
+# Function to generate a summary report
+generate_report() {
+    echo "Generating summary report of the security audit and hardening process:"
+    echo "Security audit completed on $(date)" > /var/log/security_audit_report.log
+    echo "User and Group Audits" >> /var/log/security_audit_report.log
+    check_users >> /var/log/security_audit_report.log
+    echo "File and Directory Permissions" >> /var/log/security_audit_report.log
+    check_permissions >> /var/log/security_audit_report.log
+    echo "Service Audits" >> /var/log/security_audit_report.log
+    check_services >> /var/log/security_audit_report.log
+    echo "Firewall and Network Security" >> /var/log/security_audit_report.log
+    check_firewall >> /var/log/security_audit_report.log
+    check_network >> /var/log/security_audit_report.log
+    echo "Security Updates and Patching" >> /var/log/security_audit_report.log
+    check_updates >> /var/log/security_audit_report.log
+    echo "Log Monitoring" >> /var/log/security_audit_report.log
+    check_logs >> /var/log/security_audit_report.log
+    echo "Server Hardening Steps" >> /var/log/security_audit_report.log
+    implement_hardening >> /var/log/security_audit_report.log
+    echo "Custom Security Checks" >> /var/log/security_audit_report.log
+    execute_custom_checks >> /var/log/security_audit_report.log
+    echo "Summary report generated at /var/log/security_audit_report.log"
+}
+
+# Parse command-line options
+while [[ "$1" != "" ]]; do
+    case $1 in
+        -user)
+            check_users
+            ;;
+        -permissions)
+            check_permissions
+            ;;
+        -services)
+            check_services
+            ;;
+        -firewall)
+            check_firewall
+            ;;
+        -network)
+            check_network
+            ;;
+        -updates)
+            check_updates
+            ;;
+        -logs)
+            check_logs
+            ;;
+        -hardening)
+            implement_hardening
+            ;;
+        -custom)
+            execute_custom_checks
+            ;;
+        -report)
+            generate_report
+            ;;
+        -help)
+            show_help
+            ;;
+        *)
+            echo "Invalid option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# If no arguments are passed, show help
+if [[ "$#" -eq 0 ]]; then
+    show_help
+fi
